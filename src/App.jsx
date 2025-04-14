@@ -1,78 +1,61 @@
-// File: src/App.jsx
-// Full rewrite incorporating ENS lookup and debugging console.log
-// Date: Sunday, April 13, 2025 at 11:18 AM MST (Phoenix, AZ)
-
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
-import './App.css'; // Make sure you have basic CSS, or remove this line
+
+// Material-UI Components
+import CssBaseline from '@mui/material/CssBaseline';
+import Container from '@mui/material/Container';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Typography from '@mui/material/Typography';
+import Paper from '@mui/material/Paper';
+import Link from '@mui/material/Link';
+import TextField from '@mui/material/TextField';
+import Alert from '@mui/material/Alert';
+import Stack from '@mui/material/Stack'; // For simplified layout spacing
+import CircularProgress from '@mui/material/CircularProgress'; // For loading indicator
 
 // --- Configuration ---
 // PASTE YOUR DEPLOYED CONTRACT ADDRESS HERE:
-const contractAddress = "0x1c178D16BE81E36825199C3BbF44328462855dA7"; // <--- PASTE ADDRESS HERE
+const contractAddress = "0x1c178D16BE81E36825199C3BbF44328462855dA7"; // <--- PASTE ADDRESS HERE (e.g., "0x...")
 
 // PASTE THE ABI ARRAY YOU COPIED FROM PingEmitter.json HERE:
 // Ensure this starts with '[' and ends with ']' and ONLY contains the ABI array elements
 const contractABI = [
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "pinger",
-        "type": "address"
+    {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "pinger",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "string",
+            "name": "message",
+            "type": "string"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "timestamp",
+            "type": "uint256"
+          }
+        ],
+        "name": "NewPing",
+        "type": "event"
       },
       {
-        "indexed": false,
-        "internalType": "string",
-        "name": "message",
-        "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "timestamp",
-        "type": "uint256"
-      }
-    ],
-    "name": "NewPing",
-    "type": "event"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "allPings",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "pinger",
-        "type": "address"
-      },
-      {
-        "internalType": "string",
-        "name": "message",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "timestamp",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getAllPings",
-    "outputs": [
-      {
-        "components": [
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "name": "allPings",
+        "outputs": [
           {
             "internalType": "address",
             "name": "pinger",
@@ -89,46 +72,72 @@ const contractABI = [
             "type": "uint256"
           }
         ],
-        "internalType": "struct PingEmitter.Ping[]",
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getTotalPings",
-    "outputs": [
+        "stateMutability": "view",
+        "type": "function"
+      },
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
+        "inputs": [],
+        "name": "getAllPings",
+        "outputs": [
+          {
+            "components": [
+              {
+                "internalType": "address",
+                "name": "pinger",
+                "type": "address"
+              },
+              {
+                "internalType": "string",
+                "name": "message",
+                "type": "string"
+              },
+              {
+                "internalType": "uint256",
+                "name": "timestamp",
+                "type": "uint256"
+              }
+            ],
+            "internalType": "struct PingEmitter.Ping[]",
+            "name": "",
+            "type": "tuple[]"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
       {
-        "internalType": "string",
-        "name": "_message",
-        "type": "string"
+        "inputs": [],
+        "name": "getTotalPings",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "string",
+            "name": "_message",
+            "type": "string"
+          }
+        ],
+        "name": "ping",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
       }
-    ],
-    "name": "ping",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-];
+]; // <--- ENSURE YOUR ABI IS CORRECTLY PASTED HERE
 
 // Target Network Details (Sepolia)
 const targetNetworkId = '0xaa36a7'; // Chain ID for Sepolia (11155111 in hex)
 const targetNetworkName = 'Sepolia Testnet';
 const targetNetworkDecimalId = 11155111;
+// --- End Configuration ---
 
 function App() {
     // --- State Variables ---
@@ -140,182 +149,57 @@ function App() {
     const [isConnected, setIsConnected] = useState(false);
     const [isCorrectNetwork, setIsCorrectNetwork] = useState(false);
     const [message, setMessage] = useState('');
-    const [pings, setPings] = useState([]); // Will store objects like { pinger, message, timestamp, ensName }
+    const [pings, setPings] = useState([]); // Stores { pinger, message, timestamp, ensName }
     const [loadingPings, setLoadingPings] = useState(false);
-    const [txStatus, setTxStatus] = useState(''); // For user feedback
-    const [pinging, setPinging] = useState(false); // To disable button during tx
+    const [txStatus, setTxStatus] = useState(''); // User feedback messages
+    const [pinging, setPinging] = useState(false); // Disable button during tx
 
-    // --- Core Functions ---
+    // --- Helper Functions ---
 
-    // Function to connect wallet
-    const connectWallet = async () => {
-        setTxStatus(''); // Clear previous status
-        setIsCorrectNetwork(false); // Reset network status
-        setContract(null); // Reset contract
-        setNetwork(null); // Reset network
-        setAccount(null);
-        setSigner(null);
-        setIsConnected(false);
-
-
-        if (typeof window.ethereum !== 'undefined') {
-            try {
-                console.log("Attempting to connect wallet...");
-                // Create provider
-                const web3Provider = new ethers.BrowserProvider(window.ethereum);
-                setProvider(web3Provider); // Set provider state early
-
-                console.log("Requesting accounts...");
-                const accounts = await web3Provider.send("eth_requestAccounts", []);
-
-                if (accounts && accounts.length > 0) {
-                    const userAddress = accounts[0];
-                    console.log("Accounts received:", userAddress);
-                    setAccount(userAddress); // Set account state
-                    setIsConnected(true); // Now connected
-
-                    console.log("Getting signer...");
-                    const currentSigner = await web3Provider.getSigner();
-                    setSigner(currentSigner); // Set signer state
-                    console.log("Signer obtained.");
-
-                    console.log("Getting network information...");
-                    let currentNetwork = null;
-                    try {
-                        // Wait briefly in case Metamask needs a moment after connection
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                        currentNetwork = await web3Provider.getNetwork();
-                        console.log("Result of provider.getNetwork():", currentNetwork); // Log the result directly
-                    } catch (networkError) {
-                        console.error("Error fetching network:", networkError);
-                        setTxStatus(`Error getting network: ${networkError.message}`);
-                        return; // Stop if network fetch fails
-                    }
-
-                    if (currentNetwork) {
-                        setNetwork(currentNetwork); // Set network state
-                        //checkNetwork(currentNetwork); // Check if it's the correct one & init contract
-                    } else {
-                        console.error("provider.getNetwork() returned null or undefined.");
-                        setTxStatus('Could not detect network info.');
-                        setIsCorrectNetwork(false);
-                    }
-
-                } else {
-                    console.log("No accounts received.");
-                    setTxStatus('No accounts found/approved.');
-                }
-
-            } catch (error) {
-                console.error("Error during connectWallet:", error);
-                 setTxStatus(`Connection Error: ${error.message || 'Unknown error'}`);
-                // Reset everything on error
-                 setIsConnected(false);
-                 setIsCorrectNetwork(false);
-                 setAccount(null);
-                 setSigner(null);
-                 setProvider(null);
-                 setContract(null);
-                 setNetwork(null);
-            }
-        } else {
-             setTxStatus("Metamask not detected! Please install Metamask.");
-            alert('Please install Metamask!');
+    // Determine Alert severity based on status message content
+    const getAlertSeverity = (status) => {
+        if (!status) return 'info'; // Handle empty status
+        const lowerStatus = status.toLowerCase();
+        if (lowerStatus.includes('error') || lowerStatus.includes('fail') || lowerStatus.includes('wrong') || lowerStatus.includes('please switch') || lowerStatus.includes('rejected')) {
+            return 'error';
         }
+        if (lowerStatus.includes('success') || lowerStatus.includes('confirmed') || lowerStatus.includes('loaded') || lowerStatus.includes('received')) {
+            return 'success';
+        }
+        if (lowerStatus.includes('sending') || lowerStatus.includes('waiting') || lowerStatus.includes('fetching') || lowerStatus.includes('initializing')) {
+            return 'info';
+        }
+        return 'info'; // Default
     };
 
-     // Function to check if on correct network and setup contract
-    const checkNetwork = (currentNetwork) => {
-        if (!currentNetwork || typeof currentNetwork.chainId === 'undefined') {
-            console.log("checkNetwork called with invalid network object:", currentNetwork);
-            setIsCorrectNetwork(false);
-            setContract(null);
-            setTxStatus('Network undetectable.');
-            return;
-        }
+    // --- Core Logic Functions ---
 
-        const currentChainId = currentNetwork.chainId;
-        const targetChainIdBigInt = ethers.toBigInt(targetNetworkId);
-        console.log(`Checking network: Reported=${currentChainId}, Target=${targetChainIdBigInt}`);
-
-        const isOnTarget = currentChainId === targetChainIdBigInt;
-        console.log("Is on target network?", isOnTarget);
-        setIsCorrectNetwork(isOnTarget);
-
-        if (isOnTarget) {
-             setTxStatus('Connected to Sepolia.'); // Clear previous errors
-            // Initialize contract ONLY if we have a signer
-            if (signer) {
-                try {
-                    // Check if ABI is provided
-                    if (!contractABI || contractABI.length === 0) {
-                        throw new Error("Contract ABI is missing or empty. Please paste it into App.jsx.");
-                    }
-                    // Check if address is provided
-                    if (!contractAddress || !ethers.isAddress(contractAddress) || contractAddress === "YOUR_DEPLOYED_CONTRACT_ADDRESS") {
-                         throw new Error("Contract Address is missing, invalid, or still the placeholder value. Please add it to App.jsx.");
-                    }
-                    const contractInstance = new ethers.Contract(contractAddress, contractABI, signer);
-                    setContract(contractInstance); // Set contract state
-                    console.log("Contract initialized");
-                    // Fetch pings using the newly created instance and provider state
-                    fetchPings(contractInstance, provider);
-                } catch (error) {
-                     console.error("Error initializing contract:", error);
-                     setTxStatus(`Error initializing contract: ${error.message}`);
-                     setContract(null); // Ensure contract is null if init fails
-                }
-            } else {
-                console.warn("On correct network, but signer not available yet to initialize contract.");
-                setTxStatus("Wallet connected, signer pending..."); // Indicate waiting state
-                 setContract(null); // Ensure contract is null if signer isn't ready
-            }
-        } else {
-            setContract(null); // Clear contract if network is wrong
-            setTxStatus(`Please switch Metamask to ${targetNetworkName} (Chain ID: ${targetNetworkDecimalId})`);
-        }
-    };
-
-    // Updated fetchPings to accept instances or use state, includes ENS lookup
-    const fetchPings = async (activeContract = contract, activeProvider = provider) => {
-         if (!activeContract) {
-             console.log("Fetch pings skipped: Contract not available.");
-             // setPings([]); // Keep existing pings if contract becomes temporarily unavailable? Or clear? Let's clear.
-             setPings([]);
-             return;
-        }
-         if (!activeProvider) {
-            console.log("Fetch pings: Provider not available for ENS lookup. Fetching raw pings only.");
-             try {
-                 const fetchedPingsRaw = await activeContract.getAllPings();
-                 const formattedPings = fetchedPingsRaw.map(p => ({
-                     pinger: p.pinger,
-                     message: p.message,
-                     timestamp: new Date(Number(p.timestamp) * 1000),
-                     ensName: null // No provider, so ENS is null
-                 })).reverse();
-                 setPings(formattedPings);
-                 setTxStatus("Pings loaded (ENS lookup skipped - provider missing).");
-             } catch (error) {
-                  console.error("Error fetching raw pings:", error);
-                  setTxStatus(`Error fetching pings: ${error.message}`);
-                  setPings([]);
-             }
+    // Fetch Pings (including ENS resolution) - Memoized with useCallback
+    const fetchPings = useCallback(async (activeContract, activeProvider) => {
+        // Added explicit checks for activeContract/Provider passed as args
+        if (!activeContract || !activeProvider) {
+            console.warn("fetchPings called without active contract or provider.");
+            // Decide if you want to clear or keep old pings when contract/provider unavailable
+            // setPings([]); // Optional: Clear pings
             return;
         }
 
         setLoadingPings(true);
-        // Set status only if not already showing a more important message from connection/tx
-        if (!txStatus || txStatus.includes('loaded') || txStatus.includes('No pings')) {
-            setTxStatus('Fetching pings and resolving ENS names...');
+        // Avoid overwriting critical error messages with "fetching" message
+        if (!txStatus || !getAlertSeverity(txStatus) === 'error') {
+             setTxStatus('Fetching pings...');
         }
-        console.log("Fetching pings & resolving ENS...");
+
         try {
+            // Check if the function exists on the contract instance
             if (typeof activeContract.getAllPings !== 'function') {
-                throw new Error("Contract ABI might be incorrect or contract not fully initialized. 'getAllPings' not found.");
+                throw new Error("Contract ABI might be incorrect or contract not fully initialized. 'getAllPings' function not found.");
             }
             const fetchedPingsRaw = await activeContract.getAllPings();
-            console.log("Raw pings fetched:", fetchedPingsRaw.length);
+
+            if (!Array.isArray(fetchedPingsRaw)) {
+                 throw new Error("getAllPings did not return an array.");
+            }
 
             if (fetchedPingsRaw.length === 0) {
                 setPings([]);
@@ -328,280 +212,561 @@ function App() {
             const enrichedPingsPromises = fetchedPingsRaw.map(async (rawPing) => {
                 let ensName = null;
                 try {
+                    // Basic check for valid address format before lookup
                     if (ethers.isAddress(rawPing.pinger)) {
-                        // Simpler lookup without timeout for now
+                        // Use the passed activeProvider for lookup
                         ensName = await activeProvider.lookupAddress(rawPing.pinger);
                     }
                 } catch (ensError) {
-                    console.warn(`ENS lookup failed for ${rawPing.pinger}:`, ensError.message);
-                    ensName = null;
+                    console.warn(`ENS lookup failed for ${rawPing.pinger}:`, ensError);
+                    ensName = null; // Non-critical error
                 }
                 return {
                     pinger: rawPing.pinger,
                     message: rawPing.message,
-                    timestamp: new Date(Number(rawPing.timestamp) * 1000),
-                    ensName: ensName
+                    // Ensure timestamp is treated as BigInt before converting
+                    timestamp: new Date(Number(ethers.toBigInt(rawPing.timestamp)) * 1000),
+                    ensName: ensName || null // Ensure it's null if lookup fails or returns empty
                 };
             });
 
             const enrichedPings = await Promise.all(enrichedPingsPromises);
 
-            setPings(enrichedPings.reverse()); // Show newest first
-            setTxStatus(enrichedPings.length > 0 ? 'Pings loaded.' : 'No pings found yet.');
-            console.log("Enriched pings with ENS:", enrichedPings);
+            setPings(enrichedPings.slice().reverse()); // Show newest first (use slice to avoid mutating original if needed elsewhere)
+            setTxStatus(enrichedPings.length > 0 ? `${enrichedPings.length} pings loaded.` : 'No pings found yet.');
 
         } catch (error) {
             console.error("Error during fetchPings:", error);
-            setTxStatus(`Error fetching pings: ${error.message}`);
+            setTxStatus(`Error fetching pings: ${error.message || 'Unknown error'}`);
             setPings([]); // Clear pings on error
         } finally {
             setLoadingPings(false);
         }
-    };
+    }, [txStatus]); // Dependency: txStatus to avoid overwriting errors (consider removing if causing issues)
 
-    // Function to send a ping
+    // Check Network and Initialize Contract - Memoized with useCallback
+    const checkNetwork = useCallback(async (currentProvider, currentSigner) => {
+         // Explicitly check for provider presence
+         if (!currentProvider) {
+             setTxStatus("Provider not available for network check.");
+             setIsCorrectNetwork(false);
+             setContract(null);
+             setNetwork(null);
+             return false;
+         }
+
+         try {
+             const currentNetwork = await currentProvider.getNetwork();
+             setNetwork(currentNetwork); // Update network state
+
+             if (!currentNetwork || typeof currentNetwork.chainId === 'undefined') {
+                setIsCorrectNetwork(false);
+                setContract(null);
+                setTxStatus('Network undetectable.');
+                return false; // Indicate failure
+            }
+
+            const currentChainId = currentNetwork.chainId;
+            // Convert target hex ID string to BigInt for comparison
+            const targetChainIdBigInt = ethers.toBigInt(targetNetworkId);
+
+            const isOnTarget = currentChainId === targetChainIdBigInt;
+            setIsCorrectNetwork(isOnTarget);
+
+            if (isOnTarget) {
+                // Only initialize contract if also on the correct network AND signer is available
+                if (currentSigner) {
+                    setTxStatus('Connected to Sepolia. Initializing contract...');
+                    try {
+                        // Validate Address and ABI before creating instance
+                        if (!contractAddress || !ethers.isAddress(contractAddress) || contractAddress === "YOUR_DEPLOYED_CONTRACT_ADDRESS_HERE") {
+                            throw new Error("Contract Address is missing, invalid, or still the placeholder value.");
+                        }
+                         if (!contractABI || !Array.isArray(contractABI) || contractABI.length === 0) {
+                            throw new Error("Contract ABI is missing or empty.");
+                        }
+
+                        const contractInstance = new ethers.Contract(contractAddress, contractABI, currentSigner);
+                        setContract(contractInstance);
+                        // Fetch pings immediately after successful contract init
+                        // Pass the newly created instances directly
+                        await fetchPings(contractInstance, currentProvider);
+                        return true; // Indicate success
+                    } catch (error) {
+                        console.error("Error initializing contract:", error);
+                        setTxStatus(`Error initializing contract: ${error.message}`);
+                        setContract(null); // Nullify contract on error
+                        return false; // Indicate failure
+                    }
+                } else {
+                    // Correct network, but signer isn't ready (might happen briefly)
+                    setTxStatus("Connected to Sepolia, waiting for signer to initialize contract...");
+                    setContract(null);
+                    return false; // Signer not ready
+                }
+            } else {
+                // Wrong network
+                setContract(null); // Nullify contract
+                setPings([]); // Clear pings
+                setTxStatus(`Please switch Metamask to ${targetNetworkName} (Chain ID: ${targetNetworkDecimalId})`);
+                return false; // Indicate wrong network
+            }
+         } catch (networkError) {
+            console.error("Error getting network details:", networkError);
+            setTxStatus(`Error checking network: ${networkError.message}`);
+            setIsCorrectNetwork(false);
+            setContract(null);
+            setNetwork(null);
+            return false;
+         }
+    }, [fetchPings]); // Dependencies: fetchPings
+
+    // Connect Wallet Function (Corrected Scope & Initialization Order)
+    const connectWallet = async () => {
+        // Reset states for clean connection attempt
+        setTxStatus('Connecting...');
+        setIsConnected(false);
+        setIsCorrectNetwork(false);
+        setAccount(null);
+        setSigner(null);
+        setProvider(null);
+        setContract(null);
+        setNetwork(null);
+        setPings([]);
+
+        if (typeof window.ethereum === 'undefined') {
+            setTxStatus("Metamask not detected! Please install Metamask.");
+            alert('Please install Metamask!');
+            return;
+        }
+
+        try {
+            // Create provider instance
+            const web3Provider = new ethers.BrowserProvider(window.ethereum, 'any'); // 'any' helps listen for network changes
+
+            // Request accounts first
+            const accounts = await web3Provider.send("eth_requestAccounts", []);
+
+            if (!accounts || accounts.length === 0) {
+                setTxStatus('Connection rejected or no accounts approved.');
+                return; // Exit if no accounts approved
+            }
+            const userAddress = accounts[0];
+            setAccount(userAddress); // Set account state
+
+            // Get Signer AFTER accounts are approved
+            const fetchedSigner = await web3Provider.getSigner();
+            setSigner(fetchedSigner); // Set signer state
+
+            // Set provider state AFTER successful connection
+            setProvider(web3Provider);
+
+            // Set connected flag AFTER essential states are set
+            setIsConnected(true);
+
+            // Check network and initialize contract AFTER provider and signer are set
+            // Pass the instances directly to avoid stale state issues
+            await checkNetwork(web3Provider, fetchedSigner);
+
+            // Update status after checks are done (checkNetwork sets its own status)
+            // setTxStatus('Wallet connected successfully.'); // Optional: can rely on checkNetwork status
+
+        } catch (error) {
+            console.error("Wallet connection error:", error);
+            if (error.code === 4001) { // EIP-1193 user rejected request error
+                 setTxStatus('Connection request rejected by user.');
+            } else {
+                 setTxStatus(`Error connecting wallet: ${error.message || 'Unknown error'}`);
+            }
+            // Ensure cleanup on error
+            setIsConnected(false);
+            setAccount(null);
+            setSigner(null);
+            setProvider(null);
+            setContract(null);
+            setNetwork(null);
+        }
+     }; // End connectWallet
+
+    // Send Ping Function
     const sendPing = async () => {
-        // Use contract from state
-        if (!contract || !signer || !isCorrectNetwork) {
-            alert("Please ensure your wallet is connected to Sepolia first.");
+        // Check all prerequisites
+        if (!contract) {
+             setTxStatus("Contract not initialized. Cannot send ping.");
+             return;
+        }
+         if (!signer) {
+             setTxStatus("Wallet signer not available. Cannot send ping.");
+             return;
+         }
+        if (!isCorrectNetwork) {
+            setTxStatus(`Cannot send ping: Please connect to ${targetNetworkName}.`);
             return;
         }
         if (!message.trim()) {
-            alert("Please enter a message.");
+            setTxStatus("Please enter a message to send.");
             return;
         }
 
         setPinging(true);
         setTxStatus('Sending ping... Please confirm in Metamask.');
-        console.log(`Sending ping with message: "${message}"`);
 
         try {
-             if (typeof contract.ping !== 'function') {
-                throw new Error("Contract ABI might be incorrect or contract not fully initialized. 'ping' function not found.");
+            // Verify the ping function exists on the contract instance
+            if (typeof contract.ping !== 'function') {
+                throw new Error("Contract ABI might be incorrect or contract instance invalid. 'ping' function not found.");
             }
+
+            // Estimate gas (optional but recommended)
+            // const estimatedGas = await contract.ping.estimateGas(message);
+            // console.log("Estimated Gas:", estimatedGas.toString());
+
+            // Send transaction
             const tx = await contract.ping(message);
+            // const tx = await contract.ping(message, { gasLimit: estimatedGas }); // If using estimate
+
             setTxStatus(`Transaction sent: ${tx.hash}. Waiting for confirmation...`);
-            const receipt = await tx.wait(1); // Wait for 1 confirmation
-            console.log("Transaction confirmed:", receipt);
-             // Set status briefly, event listener should trigger fetch
-             setTxStatus(`Ping successful! Confirmed in block ${receipt.blockNumber}.`);
-             setTimeout(() => { if(txStatus.startsWith('Ping successful!')) setTxStatus(''); }, 5000); // Clear status after 5s
-            setMessage(''); // Clear input
+
+            // Wait for 1 confirmation
+            const receipt = await tx.wait(1);
+
+            setTxStatus(`Ping successful! Confirmed in block ${receipt.blockNumber}. Tx: ${receipt.hash}`);
+             // Clear message only on success
+            setMessage('');
+
+            // Optionally clear the success message after a delay
+            setTimeout(() => {
+                setTxStatus(currentStatus =>
+                    (currentStatus && currentStatus.startsWith('Ping successful!')) ? '' : currentStatus
+                );
+            }, 7000); // Increased delay
+
+            // Event listener should trigger fetchPings, but can call manually if needed
+            // await fetchPings(contract, provider);
+
         } catch (error) {
             console.error("Error sending ping:", error);
-            const userRejected = error.code === 4001 || (error.message && error.message.includes('User rejected'));
-            setTxStatus(`Error sending ping: ${userRejected ? 'Transaction rejected by user.' : error.message}`);
+            const userRejected = error.code === 4001 || (error.info?.error?.code === 4001) || (error.message && error.message.toLowerCase().includes('user rejected'));
+            // Try to extract revert reason
+            let reason = error.reason;
+            if (!reason && error.data?.message) {
+                reason = error.data.message;
+            }
+            if (!reason && error.info?.error?.message) {
+                 reason = error.info.error.message;
+            }
+            if (!reason && userRejected) {
+                reason = 'Transaction rejected by user.';
+            }
+            if (!reason) {
+                 reason = error.message || 'Unknown error occurred.';
+            }
+
+            setTxStatus(`Error sending ping: ${reason}`);
         } finally {
-            setPinging(false);
+            setPinging(false); // Re-enable button
         }
-    };
+    }; // End sendPing
 
     // --- Effect Hooks ---
 
-    // Effect to check network and initialize contract when relevant states change
-    // This runs after initial connection and also if account/signer/provider change later
+    // Effect: Check network and initialize contract when provider/signer/account potentially change
+    // This effect primarily relies on connectWallet to set up provider/signer initially.
+    // It serves as a backup check if states change independently.
     useEffect(() => {
-        if (provider && account && signer) {
-            console.log("Effect triggered: Checking network state due to provider/account/signer change.");
-            provider.getNetwork().then(net => {
-                if(net) {
-                    setNetwork(net); // Update network state
-                    checkNetwork(net); // Check network and init contract if correct
-                } else {
-                    console.error("Could not get network in useEffect for checking");
-                    setTxStatus("Failed to get network details on update.");
-                    setIsCorrectNetwork(false);
-                    setContract(null);
-                }
-            }).catch(err => {
-                console.error("Error getting network in useEffect for checking:", err);
-                setTxStatus(`Error getting network details: ${err.message}`);
-                setIsCorrectNetwork(false);
-                setContract(null);
-            });
-        }
-        // Clear contract if prerequisites are lost
-        else if (!account || !signer || !provider) {
-            console.log("Effect triggered: Clearing contract due to missing provider/account/signer.");
-            setContract(null);
+        if (provider && signer && account) {
+            // Re-check network status if dependencies change after initial connection
+            checkNetwork(provider, signer);
+        } else {
+            // If essential components are missing, ensure disconnected state
+            setIsConnected(false);
             setIsCorrectNetwork(false);
-            setNetwork(null);
+            setContract(null);
+            // setTxStatus("Wallet disconnected or not fully initialized."); // Avoid setting status here if connectWallet handles it
         }
-    }, [signer, provider, account]); // Dependencies
+        // Add checkNetwork as dependency since it's memoized and depends on fetchPings
+    }, [provider, signer, account, checkNetwork]);
 
-
-    // Effect Hook for Contract Event Listener
+    // Effect: Set up Contract Event Listener
     useEffect(() => {
-        // Only setup listener if the contract instance is valid and ready
-        if (contract && typeof contract.on === 'function' && isCorrectNetwork) {
-             console.log("Setting up NewPing event listener on contract instance");
-             const listener = (pinger, msg, timestamp, event) => {
-                 console.log("NewPing event received via listener:", { pinger, msg, timestamp: Number(timestamp) });
-                 setTxStatus('New ping received via event! Refreshing list...');
-                 // Re-fetch all pings including ENS resolution
-                 fetchPings(contract, provider); // Pass current contract/provider
-                 // Clear status message after a delay, only if it hasn't been overwritten
-                 setTimeout(() => { setTxStatus(currentStatus => currentStatus === 'New ping received via event! Refreshing list...' ? '' : currentStatus); }, 5000);
+        let eventListener;
+
+        // Only set up listener if contract, provider exist and we are on the correct network
+        if (contract && provider && isCorrectNetwork && typeof contract.on === 'function') {
+             console.log("Setting up NewPing event listener...");
+
+             eventListener = (pinger, msg, timestamp, event) => {
+                 console.log("NewPing event received:", { pinger, msg, timestamp, event });
+                 // Provide user feedback
+                 setTxStatus(`New ping received from ${pinger.substring(0,6)}...! Refreshing list...`);
+                 // Refresh the ping list using the current contract and provider instances
+                 fetchPings(contract, provider);
+                 // Optionally clear the "received" message after a delay
+                 setTimeout(() => {
+                     setTxStatus(currentStatus =>
+                         (currentStatus && currentStatus.startsWith('New ping received')) ? '' : currentStatus
+                     );
+                 }, 7000); // Increased delay
              };
 
              try {
-                 contract.on("NewPing", listener);
-                 console.log("Listening for NewPing events.");
+                 contract.on("NewPing", eventListener);
              } catch (error) {
                   console.error("Error attaching NewPing listener:", error);
                   setTxStatus(`Error setting up listener: ${error.message}`);
              }
 
-            // Cleanup function
+            // Cleanup function: remove listener when component unmounts or dependencies change
             return () => {
-                if (contract && typeof contract.off === 'function') {
-                     console.log("Cleaning up NewPing event listener");
+                if (contract && typeof contract.off === 'function' && eventListener) {
                     try {
-                         contract.off("NewPing", listener);
+                         console.log("Removing NewPing event listener...");
+                         contract.off("NewPing", eventListener);
                     } catch (cleanupError) {
-                         console.error("Error cleaning up listener:", cleanupError);
+                         console.error("Error cleaning up NewPing listener:", cleanupError);
                     }
                 }
             };
         } else {
-            // Optionally log why listener isn't setup
-            // console.log("Event listener setup skipped: contract/isCorrectNetwork state not ready.", { contractReady: !!contract, isCorrectNetwork });
+             console.log("Conditions not met for setting up event listener.");
+             // No listener to set up or clean up if conditions aren't met
+             return undefined; // Explicitly return undefined for clarity
         }
-    // Dependencies: Re-run when contract, signer, or network status changes.
-    }, [contract, isCorrectNetwork, provider, signer]); // Added provider/signer here too
+    // Dependencies: Re-run if contract, provider, network status, or fetchPings change
+    }, [contract, provider, isCorrectNetwork, fetchPings]);
 
-
-    // Effect Hook to handle Metamask account/network changes initiated by the user in Metamask
+    // Effect: Handle Wallet's Account/Network Changes detected by Metamask
     useEffect(() => {
+        // Ensure window.ethereum exists and has the 'on' method
         if (window.ethereum && typeof window.ethereum.on === 'function') {
+
             const handleAccountsChanged = (accounts) => {
-                console.log("Metamask accounts changed:", accounts);
+                console.log('Metamask accountsChanged detected:', accounts);
                 if (accounts.length === 0) {
-                     console.log("Wallet disconnected via Metamask.");
-                     // Reset all state
-                     setAccount(null); setSigner(null); setContract(null);
-                     setIsConnected(false); setIsCorrectNetwork(false);
-                     setNetwork(null); setProvider(null); setPings([]);
-                     setTxStatus("Wallet disconnected. Please connect.");
-                } else if (accounts[0] !== account) { // If account changed
-                     console.log("Account switched. Re-connecting...");
-                    // Re-run connection logic for the new account
+                     // User disconnected wallet through Metamask UI
+                     setTxStatus("Wallet disconnected. Please connect again.");
+                     // Reset all relevant state
+                     setIsConnected(false);
+                     setIsCorrectNetwork(false);
+                     setAccount(null);
+                     setSigner(null);
+                     setProvider(null);
+                     setContract(null);
+                     setNetwork(null);
+                     setPings([]);
+                } else if (accounts[0].toLowerCase() !== account?.toLowerCase()) {
+                    // Account switched - treat like a new connection
+                    setTxStatus("Account switched. Reconnecting...");
+                    // Re-run the connection logic to get the new signer and check network
                     connectWallet();
                 }
+                // If account is the same, do nothing
             };
 
-            const handleChainChanged = (chainId) => {
-                console.log("Metamask network changed to:", chainId);
-                 // Reloading is the simplest way to ensure app state matches wallet state
-                 window.location.reload();
+            const handleChainChanged = (_chainId) => {
+                 console.log('Metamask chainChanged detected:', _chainId);
+                 setTxStatus(`Network changed to ${_chainId}. Reloading application state...`);
+                 // Simple approach: Re-run connection logic to get new provider/signer info & check network
+                 // This assumes connectWallet handles resetting state correctly.
+                 // Alternatively, window.location.reload() forces a full app reload. Choose based on desired UX.
+                 connectWallet();
+                 // window.location.reload(); // Use this if connectWallet doesn't fully reset everything needed
             };
 
+            // Subscribe to events
             window.ethereum.on('accountsChanged', handleAccountsChanged);
             window.ethereum.on('chainChanged', handleChainChanged);
-            console.log("Metamask event listeners added.");
 
-            // Cleanup listeners
+            // Cleanup function: Remove listeners when component unmounts
             return () => {
-                if (typeof window.ethereum.removeListener === 'function') {
-                     console.log("Cleaning up Metamask event listeners.");
+                if (window.ethereum.removeListener) {
+                     console.log("Removing Metamask event listeners...");
                      window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
                      window.ethereum.removeListener('chainChanged', handleChainChanged);
                 }
             };
         } else {
-             console.log("window.ethereum or window.ethereum.on not available for event listeners.");
+             console.warn("window.ethereum not available for event listeners.");
+             return undefined; // No listeners to clean up
         }
-    }, [account, provider]); // Re-add listeners if provider changes, check against current account
-
+    }, [account]); // Dependency: re-run setup if account changes (for comparison in handleAccountsChanged)
 
     // --- JSX Rendering ---
-
-    // Debugging log added here
-    console.log("Rendering check:", { isConnected, isCorrectNetwork, contract: contract !== null });
-
-
     return (
-        <div className="App" style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-            <h1>Ping the Blockchain! (React Version)</h1>
+        <>
+            <CssBaseline /> {/* Apply MUI's baseline styles */}
+            <Container maxWidth="md" sx={{ pt: 3, pb: 3 }}> {/* Add padding top/bottom */}
+                <Stack spacing={3}> {/* Main vertical stack for layout */}
 
-            <div id="connection" style={{ marginBottom: '20px', padding: '10px', border: '1px solid #ddd' }}>
-                {!isConnected ? (
-                    <button onClick={connectWallet}>Connect Wallet</button>
-                ) : (
-                    <button disabled>Wallet Connected</button>
-                )}
-                <p>Status: <span style={{ fontWeight: 'bold', color: isConnected ? (isCorrectNetwork ? 'green' : 'red') : 'grey' }}>
-                    {isConnected ? (isCorrectNetwork ? 'Connected to Sepolia' : 'WRONG NETWORK!') : 'Not Connected'}
-                  </span></p>
-                <p>Wallet Address: {account || 'N/A'}</p>
-                <p>Network: {network ? `${network.name || 'Unknown'} (ID: ${network.chainId})` : 'N/A'}</p>
-            </div>
+                    <Typography variant="h4" component="h1" gutterBottom align="center">
+                        PingEmitter dApp ({targetNetworkName})
+                    </Typography>
 
-            {/* Display Transaction/Status Messages */}
-            {txStatus && <p style={{ color: txStatus.toLowerCase().includes('error') || txStatus.includes('WRONG') || txStatus.includes('Please') || txStatus.includes('Fail') ? 'red' : 'green', marginTop: '10px', border: '1px solid lightgrey', padding: '5px', background: '#f8f8f8' }}>{txStatus}</p>}
+                    {/* --- Connection Status Section --- */}
+                    <Paper elevation={2} sx={{ p: 2 }}>
+                        {!isConnected ? (
+                            <Box sx={{ textAlign: 'center' }}>
+                                <Button variant="contained" color="primary" onClick={connectWallet}>
+                                    Connect Wallet
+                                </Button>
+                                <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
+                                    Please connect your Metamask wallet.
+                                </Typography>
+                            </Box>
+                        ) : (
+                            <Stack spacing={1}>
+                                <Typography variant="body1" component="div">
+                                    Status:
+                                    <Typography component="span"
+                                        sx={{
+                                            fontWeight: 'bold',
+                                            color: isCorrectNetwork ? 'success.main' : 'error.main',
+                                            ml: 0.5
+                                        }}
+                                    >
+                                        {isCorrectNetwork ? `Connected to ${targetNetworkName}` : `WRONG NETWORK! Please switch to ${targetNetworkName}.`}
+                                    </Typography>
+                                </Typography>
+                                <Typography variant="body2" sx={{ wordWrap: 'break-word' }}>
+                                    Wallet Address: {account ? (
+                                        <Link href={`https://sepolia.etherscan.io/address/${account}`} target="_blank" rel="noopener noreferrer" title="View on Sepolia Etherscan">
+                                            {account}
+                                        </Link>
+                                    ) : (
+                                        'N/A'
+                                    )}
+                                </Typography>
+                                <Typography variant="caption" display="block" sx={{ color: 'text.secondary' }}>
+                                    Current Network: {network ? `${network.name || 'Unknown'} (ID: ${network.chainId})` : 'N/A'}
+                                </Typography>
+                            </Stack>
+                        )}
+                    </Paper>
+                    {/* --- End Connection Status Section --- */}
 
-             {/* Interaction Section - Show if connected to the correct network */}
-             {isConnected && isCorrectNetwork && (
-                <div id="interaction" style={{ marginTop: '20px' }}>
-                    <hr />
-                    {/* Only show Send Ping section if contract is also initialized */}
-                    {contract ? (
-                        <> {/* Use React Fragment */}
-                        <h2>Send a Ping</h2>
-                        <div>
-                            <input
-                                type="text"
-                                value={message}
-                                onChange={(e) => setMessage(e.target.value)}
-                                placeholder="Enter your message"
-                                disabled={pinging}
-                                style={{ marginRight: '10px', padding: '8px', minWidth: '300px' }}
-                            />
-                            <button onClick={sendPing} disabled={pinging || !message.trim()} style={{ padding: '8px 15px' }}>
-                            {pinging ? 'Pinging...' : 'Send Ping'}
-                            </button>
-                        </div>
-                        </>
-                    ) : (
-                        // Show a message if contract isn't ready yet but network is okay
-                        <p style={{ fontStyle: 'italic', color: 'orange', marginTop: '20px' }}>Initializing contract interface...</p>
+                    {/* --- Transaction/Status Message Display --- */}
+                    {txStatus && (
+                        <Alert severity={getAlertSeverity(txStatus)} sx={{ mt: 2, wordBreak: 'break-word' }}>
+                            {txStatus}
+                        </Alert>
+                    )}
+                    {/* --- End Status Message Display --- */}
+
+                    {/* --- Interaction Section (Render only if connected and on correct network) --- */}
+                    {isConnected && isCorrectNetwork && contract && (
+                        <Box sx={{ mt: 2 }}>
+                             <Stack spacing={3}>
+
+                                {/* --- Send Ping Section --- */}
+                                <Paper elevation={1} sx={{ p: 2 }}>
+                                    <Typography variant="h6" component="h2" gutterBottom>
+                                        Send Ping
+                                    </Typography>
+                                    <Stack spacing={2} direction={{ xs: 'column', sm: 'row' }} alignItems="center">
+                                        <TextField
+                                            fullWidth
+                                            label="Your Message"
+                                            variant="outlined"
+                                            value={message}
+                                            onChange={(e) => setMessage(e.target.value)}
+                                            disabled={pinging} // Disable input while pinging
+                                            size="small"
+                                            sx={{ flexGrow: 1 }} // Allow text field to grow
+                                        />
+                                        <Button
+                                            variant="contained"
+                                            color="primary"
+                                            onClick={sendPing}
+                                            disabled={pinging || !message.trim()} // Disable if pinging or message is empty/whitespace
+                                            sx={{ minWidth: 120, flexShrink: 0 }} // Prevent button from shrinking too much
+                                        >
+                                            {pinging ? <CircularProgress size={24} color="inherit" /> : 'Send Ping'}
+                                        </Button>
+                                    </Stack>
+                                </Paper>
+                                {/* --- End Send Ping Section --- */}
+
+                                {/* --- Activity Log Section --- */}
+                                <Paper elevation={1} sx={{ p: 2 }}>
+                                    <Stack spacing={2}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                                            <Typography variant="h6" component="h2">
+                                                Activity Log
+                                            </Typography>
+                                            <Button
+                                                variant="outlined"
+                                                onClick={() => fetchPings(contract, provider)} // Pass current instances
+                                                disabled={loadingPings || !contract || !provider}
+                                                size="small"
+                                            >
+                                                {loadingPings ? <CircularProgress size={20} /> : 'Refresh Pings'}
+                                            </Button>
+                                        </Box>
+
+                                        <Box sx={{
+                                            maxHeight: '400px', // Limit height
+                                            overflowY: 'auto',  // Enable vertical scroll
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                            p: 1,
+                                            borderRadius: 1
+                                        }}>
+                                            {loadingPings && (
+                                                <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                                                    <CircularProgress />
+                                                </Box>
+                                            )}
+                                            {!loadingPings && pings.length === 0 && (
+                                                <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
+                                                    No pings found yet. Send the first one!
+                                                </Typography>
+                                            )}
+                                            {!loadingPings && pings.length > 0 && (
+                                                <Stack spacing={1.5}>
+                                                    {pings.map((ping, index) => (
+                                                        // Added more robust key using tx hash or index if available, fallback needed
+                                                        <Paper key={`${ping.pinger}-${ping.timestamp.getTime()}-${index}`} variant="outlined" sx={{ p: 1.5 }}>
+                                                            <Typography variant="body2" sx={{ wordWrap: 'break-word', mb: 0.5 }}>
+                                                                <strong>From:</strong>{' '}
+                                                                <Link href={`https://sepolia.etherscan.io/address/${ping.pinger}`} target="_blank" rel="noopener noreferrer" title={`View ${ping.pinger} on Etherscan`}>
+                                                                    {ping.ensName ?
+                                                                        // Show ENS name and truncated address
+                                                                        `${ping.ensName} (${ping.pinger.substring(0, 6)}...${ping.pinger.substring(ping.pinger.length - 4)})`
+                                                                        : // Show only truncated address if no ENS name
+                                                                        `${ping.pinger.substring(0, 6)}...${ping.pinger.substring(ping.pinger.length - 4)}`
+                                                                    }
+                                                                </Link>
+                                                            </Typography>
+                                                            <Typography variant="body1" sx={{ wordWrap: 'break-word', mb: 0.5 }}>
+                                                                "{ping.message}"
+                                                            </Typography>
+                                                            <Typography variant="caption" display="block" sx={{ color: 'text.secondary', textAlign: 'right' }}>
+                                                                {ping.timestamp.toLocaleString()} {/* Use locale-specific time format */}
+                                                            </Typography>
+                                                        </Paper>
+                                                    ))}
+                                                </Stack>
+                                            )}
+                                        </Box>
+                                    </Stack>
+                                </Paper>
+                                {/* --- End Activity Log Section --- */}
+
+                            </Stack> {/* End Inner Stack */}
+                        </Box>
                     )}
 
+                    {/* Message shown if connected BUT on wrong network OR contract not ready */}
+                     {isConnected && (!isCorrectNetwork || !contract) && (
+                         <Alert severity={!isCorrectNetwork ? "warning" : "info"} sx={{ mt: 2 }}>
+                            {!isCorrectNetwork ? `Please switch Metamask to the ${targetNetworkName} network.` : "Initializing contract interface..."}
+                         </Alert>
+                     )}
 
-                    <h2 style={{ marginTop: '30px' }}>Activity Log</h2>
-                    {/* Fetch button only enabled if contract is ready */}
-                    <button onClick={() => fetchPings()} disabled={loadingPings || !contract} style={{ padding: '8px 15px' }}>
-                        {loadingPings ? 'Refreshing...' : 'Refresh Pings'}
-                    </button>
-                    <div id="pings" style={{ marginTop: '10px', maxHeight: '400px', overflowY: 'auto', border: '1px solid #eee', padding: '10px' }}>
-                        {loadingPings && <p>Loading pings...</p>}
-                        {!loadingPings && pings.length === 0 && <p>No pings found yet.</p>}
-                        {!loadingPings && pings.map((ping, index) => (
-                            <div key={`${ping.pinger}-${Number(ping.timestamp)}-${index}`} style={{ borderBottom: '1px dashed #ccc', marginBottom: '10px', padding: '10px 0', wordWrap: 'break-word' }}>
-                                <p style={{ margin: '2px 0' }}>
-                                    <strong>From:</strong>{' '}
-                                    <a href={`https://sepolia.etherscan.io/address/${ping.pinger}`} target="_blank" rel="noopener noreferrer" title={ping.pinger}>
-                                        {/* Conditionally display ENS name or fallback to address */}
-                                        {ping.ensName ?
-                                            `${ping.ensName} (${ping.pinger.substring(0, 6)}...${ping.pinger.substring(ping.pinger.length - 4)})`
-                                            : ping.pinger
-                                        }
-                                    </a>
-                                </p>
-                                <p style={{ margin: '2px 0' }}><strong>Message:</strong> {ping.message}</p>
-                                <p style={{ margin: '2px 0', fontSize: '0.9em', color: '#555' }}><strong>Time:</strong> {ping.timestamp.toLocaleString()}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+                </Stack> {/* End Main Vertical Stack */}
+            </Container>
+        </>
+    ); // End return
+} // End App function
 
-            {/* Show specific message if connected but on wrong network */}
-            {isConnected && !isCorrectNetwork && network && (
-                 <p style={{color: 'red', marginTop: '20px'}}>Please switch Metamask to the {targetNetworkName} network.</p>
-             )}
-        </div>
-    );
-}
-
-export default App;
+export default App; // Export component
